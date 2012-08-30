@@ -1,0 +1,241 @@
+#!/usr/bin/perl
+#
+# Copyright (C) 2012 Robin Bramley, Ixxus Ltd.
+#
+# Copying and distribution of this file, with or without modification,
+# are permitted in any medium without royalty provided the copyright
+# notice and this notice are preserved.  This file is offered as-is,
+# without any warranty.
+#
+# DESCRIPTION:
+#    Check ElasticSearch status using the JSON Cluster Health API
+#
+
+use warnings;
+use strict;
+use Getopt::Std;
+use LWP::UserAgent;
+use JSON;
+
+# About the check
+my $script             = "check_elasticsearch";
+my $script_version     = "0.1";
+my $script_description = "Extracts information from ElasticSearch and performs checks on the results";
+
+# Nagios return values
+# OK = 0
+# WARNING = 1
+# CRITICAL = 2
+# UNKNOWN = 3
+
+my $retStr    = "Unknown - plugin error";
+my @alertStrs = ( "OK", "WARNING", "CRITICAL", "UNKNOWN" );
+my %statusCodesMap = ( "green"=>0, "yellow"=>1, "red"=>2 );
+my $exitCode  = 3;
+my $numArgs   = $#ARGV + 1;
+my $perfData = "";
+
+# variables
+my %opts;
+getopts('shH:p:u:o:w:c:n:', \%opts);
+# secure flag; host; port; url portion; option; warning; critical; index name 
+
+my $protocol = 'http';
+my $hostname;
+my $port = 9200;
+my $path = '/_cluster/health';
+
+my $metric = 'cluster_status';
+my $indexName = '_all';
+
+my $warning;
+my $critical;
+
+## process command line arguments
+
+if ($opts{'h'}) {
+    usage();
+    exit 0;
+}
+
+# secure flag
+if ($opts{'s'}) {
+	$protocol = 'https';
+}
+
+# Hostname
+if ($opts{'H'}) {
+    $hostname = $opts{'H'};
+}
+else {
+    print 'No hostname specified\n';
+    usage();
+    exit 3;
+}
+
+# User specified port number
+if ($opts{'p'}) {
+    if ( $opts{'p'} !~ /[0-9]+/ ) {
+        print 'Specify port number as an integer\n';
+        exit 3;
+    }
+
+    $port = $opts{'p'};
+}
+
+# metric option
+if ($opts{'o'}) {
+	if ( $opts{'o'} eq 'cluster_status' ) {
+		# path and metric already defaulted to cluster_status
+	}
+	elsif ( $opts{'o'} eq 'index_status' ) {
+		$metric = $opts{'o'};
+		$path = "/_cluster/health?level=indices";
+	} 
+	elsif ( $opts{'o'} eq 'shard_status' ) {
+		$metric = $opts{'o'};
+		$path = "/_cluster/health?level=shards";
+	} 
+	else {
+        print "Unsupported option $opts{'o'}\n";
+        usage();
+        exit 3;
+    }	
+}
+
+# specified query handler name
+if ( $opts{'n'} ) {
+	$indexName = $opts{'n'};
+}
+
+# specified path portion of the URL
+if ( $opts{'u'} ) {
+	$path = $opts{'u'};
+}
+
+my $url = "${protocol}://${hostname}:${port}${path}";
+#print "URL: $url\n";
+
+# thresholds
+if ( $opts{'w'} ) {
+	$warning = $opts{'w'};
+}
+if ( $opts{'c'} ) {
+	$critical = $opts{'c'};
+}
+
+# Make the GET request to ElasticSearch
+my $ua = LWP::UserAgent->new;
+my $req = HTTP::Request->new( GET => $url );
+my $res = $ua->request($req);
+
+# if we have a HTTP 200 OK response
+if ( $res->is_success ) {
+    my $json = new JSON;
+
+    # get content
+    #print $res->decoded_content . "\n";
+    my $obj = $json->decode( $res->content );
+
+	# Metric switch
+	if( $metric eq 'cluster_status') {
+		# print "Cluster name: $obj->{cluster_name}";
+    	$retStr   = "$obj->{cluster_name} health = $obj->{status}";
+		
+        if ( $statusCodesMap{$obj->{status}} ) {
+            $exitCode = $statusCodesMap{$obj->{status}};
+        }
+        else {
+            $retStr   = "$obj->{cluster_name} = cluster in unknown status ($obj->{status})";
+            $exitCode = 3;
+        }
+	}
+	elsif( $metric eq 'index_status') {
+	    if ( $obj->{indices}->{$indexName} ) {
+	    	# check for a specific index name
+    		$retStr   = "$indexName health = $obj->{indices}->{$indexName}->{status}";
+		
+        	if ( $statusCodesMap{$obj->{indices}->{$indexName}->{status}} ) {
+            	$exitCode = $statusCodesMap{$obj->{indices}->{$indexName}->{status}};
+      	    }
+        	else {
+            	$retStr   = "$indexName = index in unknown status ($obj->{indices}->{$indexName}->{status})";
+            	$exitCode = 3;
+        	}
+	    }
+		else {
+        	$retStr   = "Index $indexName not found in status data (use -n)";
+         	$exitCode = 3;
+		}
+	}
+	elsif( $metric eq 'shard_status') {
+	    if ( $obj->{indices}->{$indexName} ) {
+	    	my %stateCounts = ( "green"=>0, "yellow"=>0, "red"=>0 );
+	    	my $i = 0;
+	    	my $j = $obj->{indices}->{$indexName}->{number_of_shards};
+	    
+	    	while ($i < $j) {
+	    		my $state = $obj->{indices}->{$indexName}->{shards}->{$i}->{status};
+	    		$stateCounts{$state}++;
+	    		
+	    		$i++;
+	    	}
+	    	# check for a specific index name
+    		$retStr   = "$indexName shards health: green=$stateCounts{'green'}, yellow=$stateCounts{'yellow'}, red=$stateCounts{'red'}";
+
+			# TODO: highest exit code
+		
+        	if ( $stateCounts{'red'} > 0 ) {
+            	$exitCode = 2;
+      	    }
+      	    elsif ( $stateCounts{'yellow'} > 0 ) {
+            	$exitCode = 1;
+      	    }
+      	    elsif ( $stateCounts{'green'} > 0 ) {
+            	$exitCode = 0;
+      	    }
+        	else {
+            	$retStr   = "$indexName shards in unknown state!";
+            	$exitCode = 3;
+        	}
+	    }
+		else {
+        	$retStr   = "Index $indexName not found in status data (use -n)";
+         	$exitCode = 3;
+		}
+	}
+}
+else {
+    $retStr   = $res->status_line;
+    $exitCode = 1;
+}
+
+print $alertStrs[$exitCode] . " - $retStr | $perfData\n";
+exit $exitCode;
+
+# Display the usage message
+sub usage {
+    print <<EOF
+------------------------------------------------------------------------------
+$script $script_version
+
+$script_description
+
+Usage: $script -H <hostname>
+
+Options: -s     Use secure transport (https)
+         -H     Hostname or IP address of ElasticSearch server
+         -p     ElasticSearch port number (if not supplied defaults to port 9200)
+         -u     URL path (defaults to /_cluster/health) 
+         -o     Option: cluster_status/index_status/shard_status 
+                (defaults to 'cluster_status')
+         -n     Index name for index response statistics (defaults to '_all')
+         -w     Warning criteria (Integer - used by response, N/A for cluster_status)
+         -c     Critical criteria (Integer - used by response, N/A for cluster_status)
+
+------------------------------------------------------------------------------
+Copyright (c) 2012 Robin Bramley, Ixxus Limited.
+------------------------------------------------------------------------------
+EOF
+
+}
