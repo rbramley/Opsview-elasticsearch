@@ -68,7 +68,7 @@ if ($opts{'H'}) {
     $hostname = $opts{'H'};
 }
 else {
-    print 'No hostname specified\n';
+    print "No hostname specified\n";
     usage();
     exit 3;
 }
@@ -76,7 +76,7 @@ else {
 # User specified port number
 if ($opts{'p'}) {
     if ( $opts{'p'} !~ /[0-9]+/ ) {
-        print 'Specify port number as an integer\n';
+        print "Specify port number as an integer\n";
         exit 3;
     }
 
@@ -180,11 +180,9 @@ if ( $res->is_success ) {
 	    		
 	    		$i++;
 	    	}
-	    	# check for a specific index name
+
     		$retStr   = "$indexName shards health: green=$stateCounts{'green'}, yellow=$stateCounts{'yellow'}, red=$stateCounts{'red'}";
 
-			# TODO: highest exit code
-		
         	if ( $stateCounts{'red'} > 0 ) {
             	$exitCode = 2;
       	    }
@@ -225,13 +223,13 @@ Usage: $script -H <hostname>
 
 Options: -s     Use secure transport (https)
          -H     Hostname or IP address of ElasticSearch server
-         -p     ElasticSearch port number (if not supplied defaults to port 9200)
+         -p     ElasticSearch port number (defaults to port 9200)
          -u     URL path (defaults to /_cluster/health) 
          -o     Option: cluster_status/index_status/shard_status 
                 (defaults to 'cluster_status')
          -n     Index name for index response statistics (defaults to '_all')
-         -w     Warning criteria (Integer - used by response, N/A for cluster_status)
-         -c     Critical criteria (Integer - used by response, N/A for cluster_status)
+         -w     Warning criteria (Integer - N/A for cluster_status)
+         -c     Critical criteria (Integer - N/A for cluster_status)
 
 ------------------------------------------------------------------------------
 Copyright (c) 2012 Robin Bramley, Ixxus Limited.
