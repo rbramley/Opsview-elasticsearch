@@ -1,7 +1,7 @@
 Monitoring ElasticSearch with Opsview
 ============================
 
-This repository contains an Opsview (<http://www.opsview.com>) plugin written in Perl for monitoring ElasticSearch (<http://lucene.apache.org/solr/>) using the Cluster Health API (<http://www.elasticsearch.org/guide/reference/api/admin-cluster-health.html>).
+This repository contains an Opsview (<http://www.opsview.com>) plugin written in Perl for monitoring ElasticSearch (<http://www.elasticsearch.org/>) using the Cluster Health API (<http://www.elasticsearch.org/guide/reference/api/admin-cluster-health.html>).
 
 The intention is to add stats / status information.
 
