@@ -142,7 +142,7 @@ if ( $res->is_success ) {
 		# print "Cluster name: $obj->{cluster_name}";
     	$retStr   = "$obj->{cluster_name} health = $obj->{status}";
 		
-        if ( $statusCodesMap{$obj->{status}} ) {
+        if ( defined $statusCodesMap{$obj->{status}} ) {
             $exitCode = $statusCodesMap{$obj->{status}};
         }
         else {
@@ -151,7 +151,7 @@ if ( $res->is_success ) {
         }
 	}
 	elsif( $metric eq 'index_status') {
-	    if ( $obj->{indices}->{$indexName} ) {
+	    if ( defined $obj->{indices}->{$indexName} ) {
 	    	# check for a specific index name
     		$retStr   = "$indexName health = $obj->{indices}->{$indexName}->{status}";
 		
@@ -169,7 +169,7 @@ if ( $res->is_success ) {
 		}
 	}
 	elsif( $metric eq 'shard_status') {
-	    if ( $obj->{indices}->{$indexName} ) {
+	    if ( defined $obj->{indices}->{$indexName} ) {
 	    	my %stateCounts = ( "green"=>0, "yellow"=>0, "red"=>0 );
 	    	my $i = 0;
 	    	my $j = $obj->{indices}->{$indexName}->{number_of_shards};
