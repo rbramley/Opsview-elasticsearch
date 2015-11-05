@@ -37,12 +37,13 @@ my $perfData = "";
 
 # variables
 my %opts;
-getopts('shH:p:u:o:w:c:n:', \%opts);
-# secure flag; host; port; url portion; option; warning; critical; index name 
+getopts('shH:p:u:t:o:w:c:n:', \%opts);
+# secure flag; host; port; url portion; timeout; option; warning; critical; index name 
 
 my $protocol = 'http';
 my $hostname;
 my $port = 9200;
+my $timeout = 10;
 my $path = '/_cluster/health';
 
 my $metric = 'cluster_status';
@@ -81,6 +82,11 @@ if ($opts{'p'}) {
     }
 
     $port = $opts{'p'};
+}
+
+# User specified connection timeout (secs)
+if ($opts{'t'}) {
+    $timeout = $opts{'t'};
 }
 
 # metric option
@@ -126,6 +132,7 @@ if ( $opts{'c'} ) {
 
 # Make the GET request to ElasticSearch
 my $ua = LWP::UserAgent->new;
+$ua->timeout($timeout);
 my $req = HTTP::Request->new( GET => $url );
 my $res = $ua->request($req);
 
@@ -225,6 +232,7 @@ Options: -s     Use secure transport (https)
          -H     Hostname or IP address of ElasticSearch server
          -p     ElasticSearch port number (defaults to port 9200)
          -u     URL path (defaults to /_cluster/health) 
+         -t     Connection timeout in seconds (default 10)
          -o     Option: cluster_status/index_status/shard_status 
                 (defaults to 'cluster_status')
          -n     Index name for index response statistics (defaults to '_all')
